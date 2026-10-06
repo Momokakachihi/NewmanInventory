@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Newman Inventory</title>
+  <style>
+    :root { --ink: #17212b; --muted: #61707b; --line: #d9e1e5; --paper: #f5f7f4; --panel: #fff; --accent: #e05a33; --accent-dark: #a9381e; --green: #25705c; }
+    * { box-sizing: border-box; }
+    body { margin: 0; color: var(--ink); background: radial-gradient(circle at 90% 0%, #f5d6bd 0, transparent 34%), var(--paper); font: 15px/1.5 Georgia, serif; }
+    main { max-width: 1120px; margin: 0 auto; padding: 42px 22px 64px; }
+    header { display: flex; justify-content: space-between; align-items: end; gap: 20px; margin-bottom: 34px; }
+    h1, h2, p { margin-top: 0; } h1 { margin-bottom: 5px; font-size: clamp(2rem, 5vw, 4.4rem); line-height: .95; letter-spacing: -1px; }
+    h2 { font-size: 1.35rem; margin-bottom: 5px; } .subtle, .hint { color: var(--muted); }
+    .eyebrow { color: var(--accent-dark); font: 700 12px/1.2 Arial, sans-serif; letter-spacing: 2px; text-transform: uppercase; }
+    .grid { display: grid; grid-template-columns: 1.2fr .8fr; gap: 18px; } .panel { background: var(--panel); border: 1px solid var(--line); padding: 24px; box-shadow: 0 12px 28px #24352b0d; }
+    .drop { min-height: 220px; display: grid; place-items: center; text-align: center; border: 2px dashed #cfb5a7; background: #fffaf6; cursor: pointer; transition: .2s ease; }
+    .drop.over { border-color: var(--accent); background: #fff0e8; transform: translateY(-2px); } .drop strong { display: block; font-size: 1.2rem; }
+    input, select, button { border: 1px solid var(--line); border-radius: 3px; font: inherit; padding: 11px 12px; } input, select { width: 100%; background: #fff; }
+    button { color: white; background: var(--accent); border-color: var(--accent); cursor: pointer; font-family: Arial, sans-serif; font-weight: 700; } button:hover { background: var(--accent-dark); }
+    .row { display: flex; gap: 10px; align-items: center; margin-top: 15px; } .row > * { flex: 1; } .row button { flex: 0 0 auto; }
+    .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 18px; } .stat { padding: 14px; background: #f1f5f1; } .stat b { display: block; font-size: 1.7rem; color: var(--green); }
+    .result { min-height: 70px; margin-top: 16px; padding: 14px; background: #f5f7f4; } .ok { color: var(--green); } .error { color: #ae321f; }
+    label { display: block; margin: 14px 0 5px; font: 700 12px Arial, sans-serif; letter-spacing: .5px; text-transform: uppercase; } .hidden { display: none; }
+    @media (max-width: 760px) { header, .grid { display: block; } header { margin-bottom: 24px; } .panel { margin-bottom: 18px; } }
+  </style>
+</head>
+<body>
+<main>
+  <header><div><div class="eyebrow">Warehouse control</div><h1>Newman Inventory</h1><p class="subtle">Import the company register, then move motorcycles with a scan.</p></div><div class="eyebrow">Local database</div></header>
+  <section class="grid">
+    <div class="panel">
+      <h2>Import workbook</h2><p class="subtle">Drop the original .xlsb or .xlsx file here. Every source column is retained.</p>
+      <div id="drop" class="drop"><div><strong>Drop Excel file here</strong><span class="hint">or click to browse</span><input id="file" type="file" accept=".xlsb,.xlsx" class="hidden"></div></div>
+      <div id="sheetArea" class="hidden"><label for="sheet">Worksheet</label><div class="row"><select id="sheet"></select><button id="import">Import rows</button></div></div>
+      <div id="importResult" class="result">No workbook selected.</div>
+    </div>
+    <div class="panel">
+      <h2>Scan a motorcycle</h2><p class="subtle">Your scanner acts like a keyboard. Scan the engine or frame number and press Enter.</p>
+      <input id="scan" placeholder="Scan engine or frame number" autofocus>
+      <div id="scanResult" class="result">Waiting for a scan.</div>
+      <div id="moveArea" class="hidden"><label for="destination">New location or destination</label><input id="destination" placeholder="Example: NMT1 Warehouse"><div class="row"><button data-action="receive">Receive</button><button data-action="dispatch">Dispatch</button></div></div>
+    </div>
+  </section>
+  <section class="panel" style="margin-top:18px"><h2>Inventory snapshot</h2><div id="stats" class="stats"></div></section>
+</main>
+<script>
+  const $ = id => document.getElementById(id); let token = ''; let scanValue = '';
+  const message = (el, text, type='') => { el.textContent = text; el.className = `result ${type}`; };
+  async function send(url, options) { const response = await fetch(url, options); const data = await response.json(); if (!response.ok) throw new Error(data.error || 'Request failed'); return data; }
+  async function upload(file) {
+    const form = new FormData(); form.append('file', file); message($('importResult'), 'Reading workbook...');
+    try { const data = await send('/api/upload', { method: 'POST', body: form }); token = data.token; $('sheet').innerHTML = data.sheets.map(s => `<option>${s}</option>`).join(''); $('sheetArea').classList.remove('hidden'); message($('importResult'), `${data.filename} is ready. Choose a worksheet and import it.`, 'ok'); }
+    catch (error) { message($('importResult'), error.message, 'error'); }
+  }
+  $('drop').onclick = () => $('file').click(); $('file').onchange = event => event.target.files[0] && upload(event.target.files[0]);
+  ['dragenter','dragover'].forEach(event => $('drop').addEventListener(event, e => { e.preventDefault(); $('drop').classList.add('over'); }));
+  ['dragleave','drop'].forEach(event => $('drop').addEventListener(event, e => { e.preventDefault(); $('drop').classList.remove('over'); }));
+  $('drop').addEventListener('drop', e => e.dataTransfer.files[0] && upload(e.dataTransfer.files[0]));
+  $('import').onclick = async () => { try { const form = new FormData(); form.append('token', token); form.append('sheet', $('sheet').value); const data = await send('/api/import', { method: 'POST', body: form }); message($('importResult'), `Imported ${data.result.imported} new rows and updated ${data.result.updated} rows.`, 'ok'); refreshStats(); } catch (error) { message($('importResult'), error.message, 'error'); } };
+  $('scan').onkeydown = async event => { if (event.key !== 'Enter') return; scanValue = event.target.value; try { const data = await send('/api/scan', { method: 'POST', body: new URLSearchParams({ value: scanValue }) }); message($('scanResult'), `${data.model || 'Motorcycle'} | ${data.color || '-'} | ${data.status} | ${data.location || '-'}`, 'ok'); $('moveArea').classList.remove('hidden'); } catch (error) { $('moveArea').classList.add('hidden'); message($('scanResult'), error.message, 'error'); } };
+  document.querySelectorAll('[data-action]').forEach(button => button.onclick = async () => { try { const form = new URLSearchParams({ value: scanValue, action: button.dataset.action, destination: $('destination').value }); const data = await send('/api/move', { method: 'POST', body: form }); message($('scanResult'), `Recorded ${data.status} at ${data.location}.`, 'ok'); refreshStats(); $('destination').value = ''; } catch (error) { message($('scanResult'), error.message, 'error'); } });
+  async function refreshStats() { const data = await send('/api/stats'); $('stats').innerHTML = `<div class="stat"><b>${data.total}</b>Total records</div><div class="stat"><b>${data.in_warehouse}</b>In warehouse</div><div class="stat"><b>${data.dispatched}</b>Dispatched</div>`; } refreshStats();
+</script>
+</body>
+</html>

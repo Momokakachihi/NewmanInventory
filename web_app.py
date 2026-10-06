@@ -1,0 +1,265 @@
+import json
+import tempfile
+from datetime import datetime
+from pathlib import Path
+
+import pandas as pd
+from flask import Flask, jsonify, render_template, request
+
+from index import (
+    clean_value,
+    connect_database,
+    find_by_scan,
+    find_column,
+    setup_database,
+)
+
+
+app = Flask(__name__)
+app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
+UPLOADS = Path(tempfile.gettempdir()) / "newman_inventory_uploads"
+UPLOADS.mkdir(exist_ok=True)
+
+
+def clean_excel_value(value):
+    if value is None or pd.isna(value):
+        return ""
+    return clean_value(value)
+
+
+def read_inventory_sheet(path, sheet_name):
+    engine = "pyxlsb" if path.suffix.lower() == ".xlsb" else "openpyxl"
+    raw = pd.read_excel(path, sheet_name=sheet_name, engine=engine, header=None)
+    known_headers = {
+        "branch name", "destination", "dr remarks", "dr number", "dr date",
+        "area", "group model", "color", "engine number", "frame number",
+        "warehouse location", "date forwarded",
+    }
+    best_row = None
+    best_score = 0
+    for row_number in range(min(len(raw.index), 50)):
+        values = {" ".join(str(value).strip().lower().split()) for value in raw.iloc[row_number]}
+        score = len(values & known_headers)
+        if score > best_score:
+            best_row = row_number
+            best_score = score
+    if best_row is None or best_score == 0:
+        raise ValueError("Could not find the motorcycle column headers in this worksheet.")
+
+    headers = []
+    used_headers = set()
+    for column_number, value in enumerate(raw.iloc[best_row]):
+        header = clean_excel_value(value) or f"Source Column {column_number + 1}"
+        original_header = header
+        suffix = 2
+        while header in used_headers:
+            header = f"{original_header} {suffix}"
+            suffix += 1
+        used_headers.add(header)
+        headers.append(header)
+
+    dataframe = raw.iloc[best_row + 1:].copy()
+    dataframe.columns = headers
+    return dataframe.dropna(how="all"), best_row + 1
+
+
+def import_workbook(connection, path, sheet_name):
+    dataframe, header_row = read_inventory_sheet(path, sheet_name)
+    imported = 0
+    updated = 0
+    now = datetime.now().isoformat(timespec="seconds")
+
+    for row_number, values in enumerate(dataframe.to_dict(orient="records"), start=2):
+        row = {str(key): clean_excel_value(value) for key, value in values.items()}
+        engine_number = find_column(row, "Engine Number")
+        frame_number = find_column(row, "Frame Number")
+        dr_number = find_column(row, "DR Number")
+        identifier = frame_number or engine_number or dr_number
+        if not identifier:
+            continue
+
+        branch_name = find_column(row, "Branch Name")
+        group_model = find_column(row, "Group Model")
+        warehouse_location = find_column(row, "Warehouse Location")
+        fields = {
+            "vin": identifier.upper(),
+            "brand": branch_name,
+            "model": group_model,
+            "color": find_column(row, "Color"),
+            "status": "IN_WAREHOUSE",
+            "location": warehouse_location,
+            "created_at": now,
+            "branch_name": branch_name,
+            "destination": find_column(row, "Destination"),
+            "dr_remarks": find_column(row, "DR Remarks"),
+            "dr_number": dr_number,
+            "dr_date": find_column(row, "DR Date"),
+            "area": find_column(row, "Area"),
+            "group_model": group_model,
+            "engine_number": engine_number.upper(),
+            "frame_number": frame_number.upper(),
+            "warehouse_location": warehouse_location,
+            "date_forwarded": find_column(row, "DATE FORWARDED"),
+            "source_row": json.dumps(row, ensure_ascii=True),
+        }
+
+        existing = connection.execute(
+            "SELECT id FROM motorcycles WHERE vin = ?", (fields["vin"],)
+        ).fetchone()
+        if existing:
+            set_clause = ", ".join(f"{key} = ?" for key in fields if key != "vin")
+            connection.execute(
+                f"UPDATE motorcycles SET {set_clause} WHERE id = ?",
+                [fields[key] for key in fields if key != "vin"] + [existing[0]],
+            )
+            updated += 1
+        else:
+            columns = ", ".join(fields)
+            placeholders = ", ".join("?" for _ in fields)
+            cursor = connection.execute(
+                f"INSERT INTO motorcycles ({columns}) VALUES ({placeholders})",
+                list(fields.values()),
+            )
+            connection.execute(
+                """
+                INSERT INTO movements
+                    (motorcycle_id, movement_type, to_location, movement_date, notes)
+                VALUES (?, 'IMPORTED', ?, ?, ?)
+                """,
+                (cursor.lastrowid, fields["location"], now, f"Imported row {row_number + header_row}"),
+            )
+            imported += 1
+
+    connection.commit()
+    if imported == 0 and updated == 0:
+        raise ValueError(
+            "The worksheet was read, but no rows contained an Engine Number, "
+            "Frame Number, or DR Number. Choose the detailed motorcycle worksheet."
+        )
+    return {"imported": imported, "updated": updated, "rows": len(dataframe.index)}
+
+
+def get_connection():
+    connection = connect_database()
+    setup_database(connection)
+    return connection
+
+
+@app.get("/")
+def home():
+    return render_template("index.html")
+
+
+@app.post("/api/upload")
+def upload_workbook():
+    uploaded = request.files.get("file")
+    if not uploaded or not uploaded.filename:
+        return jsonify(error="Choose an Excel file first."), 400
+    suffix = Path(uploaded.filename).suffix.lower()
+    if suffix not in {".xlsb", ".xlsx"}:
+        return jsonify(error="Only .xlsb and .xlsx files are supported."), 400
+
+    token = next(tempfile._get_candidate_names()) + suffix
+    path = UPLOADS / token
+    uploaded.save(path)
+    try:
+        engine = "pyxlsb" if suffix == ".xlsb" else "openpyxl"
+        sheets = pd.ExcelFile(path, engine=engine).sheet_names
+    except Exception as error:
+        path.unlink(missing_ok=True)
+        return jsonify(error=f"Could not read workbook: {error}"), 400
+    return jsonify(token=token, sheets=sheets, filename=uploaded.filename)
+
+
+@app.post("/api/import")
+def import_uploaded_sheet():
+    token = request.form.get("token", "")
+    sheet = request.form.get("sheet", "")
+    path = UPLOADS / Path(token).name
+    if not path.is_file() or path.suffix.lower() not in {".xlsb", ".xlsx"}:
+        return jsonify(error="Upload session expired. Please choose the file again."), 400
+    try:
+        connection = get_connection()
+        result = import_workbook(connection, path, sheet)
+        connection.close()
+        path.unlink(missing_ok=True)
+        return jsonify(result=result)
+    except Exception as error:
+        return jsonify(error=f"Import failed: {error}"), 400
+
+
+@app.get("/api/stats")
+def stats():
+    connection = get_connection()
+    result = {
+        "total": connection.execute("SELECT COUNT(*) FROM motorcycles").fetchone()[0],
+        "in_warehouse": connection.execute(
+            "SELECT COUNT(*) FROM motorcycles WHERE status = 'IN_WAREHOUSE'"
+        ).fetchone()[0],
+        "dispatched": connection.execute(
+            "SELECT COUNT(*) FROM motorcycles WHERE status = 'DISPATCHED'"
+        ).fetchone()[0],
+    }
+    connection.close()
+    return jsonify(result)
+
+
+@app.post("/api/scan")
+def scan():
+    value = request.form.get("value", "")
+    connection = get_connection()
+    motorcycle = find_by_scan(connection, value)
+    if motorcycle is None:
+        connection.close()
+        return jsonify(error="Motorcycle was not found."), 404
+    result = {
+        "id": motorcycle[0],
+        "identifier": motorcycle[1],
+        "branch": motorcycle[2],
+        "model": motorcycle[3],
+        "color": motorcycle[4],
+        "status": motorcycle[5],
+        "location": motorcycle[6],
+        "engine": motorcycle[7],
+        "frame": motorcycle[8],
+        "dr_number": motorcycle[9],
+    }
+    connection.close()
+    return jsonify(result)
+
+
+@app.post("/api/move")
+def move():
+    value = request.form.get("value", "")
+    action = request.form.get("action", "")
+    destination = request.form.get("destination", "").strip()
+    if action not in {"receive", "dispatch"} or not destination:
+        return jsonify(error="Choose an action and enter a destination or location."), 400
+
+    connection = get_connection()
+    motorcycle = find_by_scan(connection, value)
+    if motorcycle is None:
+        connection.close()
+        return jsonify(error="Motorcycle was not found."), 404
+    now = datetime.now().isoformat(timespec="seconds")
+    new_status = "IN_WAREHOUSE" if action == "receive" else "DISPATCHED"
+    movement_type = "RECEIVED" if action == "receive" else "DISPATCHED"
+    connection.execute(
+        "UPDATE motorcycles SET status = ?, location = ?, warehouse_location = ? WHERE id = ?",
+        (new_status, destination, destination, motorcycle[0]),
+    )
+    connection.execute(
+        """
+        INSERT INTO movements
+            (motorcycle_id, movement_type, from_location, to_location, movement_date)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (motorcycle[0], movement_type, motorcycle[6], destination, now),
+    )
+    connection.commit()
+    connection.close()
+    return jsonify(status=new_status, location=destination)
+
+
+if __name__ == "__main__":
+    app.run(host="127.0.0.1", port=5000, debug=False)
