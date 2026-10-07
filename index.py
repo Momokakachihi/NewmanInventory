@@ -62,6 +62,16 @@ def setup_database(connection):
 			notes TEXT,
 			FOREIGN KEY (motorcycle_id) REFERENCES motorcycles(id)
 		);
+
+		CREATE TABLE IF NOT EXISTS inventory_scans (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			motorcycle_id INTEGER NOT NULL,
+			scan_mode TEXT NOT NULL CHECK (scan_mode IN ('single', 'bulk')),
+			truck_number TEXT NOT NULL,
+			scanned_at TEXT NOT NULL,
+			completed_at TEXT,
+			FOREIGN KEY (motorcycle_id) REFERENCES motorcycles(id)
+		);
 	""")
 	for column in IMPORT_COLUMNS:
 		try:
@@ -69,6 +79,11 @@ def setup_database(connection):
 		except sqlite3.OperationalError as error:
 			if "duplicate column name" not in str(error).lower():
 				raise
+	try:
+		connection.execute("ALTER TABLE inventory_scans ADD COLUMN completed_at TEXT")
+	except sqlite3.OperationalError as error:
+		if "duplicate column name" not in str(error).lower():
+			raise
 	connection.commit()
 
 
