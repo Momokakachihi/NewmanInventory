@@ -222,6 +222,8 @@ def get_connection():
 
 @app.get("/")
 def home():
+    if not session.get("authenticated"):
+        return redirect(url_for("login"))
     return render_template("index.html")
 
 
