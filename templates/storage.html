@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Storage | Newman</title>
+  <style>
+    :root { --maroon:#5b1719; --gold:#f6b83f; --ink:#4d2529; --muted:#8d8582; --line:#e9e4e1; --paper:#f8f7f6; --panel:#fff; --green:#25705c; }
+    * { box-sizing:border-box; } html,body { overflow-x:hidden; }
+    body { margin:0; color:var(--ink); background:var(--paper); font:13px/1.45 Arial,sans-serif; }
+    .topbar { height:56px; color:#fff; background:var(--maroon); border-bottom:2px solid #1593d0; }
+    .topbar-inner { max-width:1100px; height:100%; margin:auto; display:flex; align-items:center; }
+    .logo { display:flex; align-items:center; gap:10px; min-width:245px; padding:0 26px 0 4px; border-right:1px solid #8a4a4b; }
+    .logo-mark { width:38px; height:38px; object-fit:contain; }
+    .logo-name { font-size:19px; font-weight:800; letter-spacing:1px; }
+    .logo-sub { display:block; margin-top:-3px; font-size:6px; letter-spacing:.8px; }
+    .nav-link { display:flex; align-items:center; height:100%; gap:8px; padding:0 20px; color:#fff; border-bottom:3px solid transparent; text-decoration:none; font-weight:700; }
+    .nav-link:hover, .nav-link.active { border-bottom-color:var(--gold); }
+    .nav-icon { width:15px; height:15px; object-fit:contain; }
+    .sign-in { margin-left:auto; padding:18px 20px; border-left:1px solid #8a4a4b; border-right:1px solid #8a4a4b; color:#fff; text-decoration:none; font-weight:700; }
+    main { max-width:1100px; margin:0 auto; padding:32px 22px 64px; }
+    h1,h2,h3,p { margin-top:0; }
+    h1 { margin-bottom:5px; color:var(--maroon); font-size:34px; line-height:1; }
+    h2 { margin-bottom:5px; font-size:19px; }
+    .subtle { color:var(--muted); }
+    .heading { display:flex; justify-content:space-between; align-items:end; margin-bottom:20px; }
+    button { border:1px solid var(--maroon); border-radius:4px; padding:10px 14px; color:#fff; background:var(--maroon); cursor:pointer; font:700 13px Arial,sans-serif; }
+    button:hover { background:#421013; }
+    .warehouse-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:18px; }
+    .warehouse { overflow:hidden; background:var(--panel); border:1px solid var(--line); border-radius:7px; }
+    .warehouse-heading { display:flex; justify-content:space-between; align-items:baseline; padding:17px 18px; background:var(--maroon); color:#fff; }
+    .warehouse-heading h2 { margin:0; font-size:18px; }
+    .warehouse-count { color:var(--gold); font-size:23px; font-weight:800; }
+    .table-wrap { overflow-x:auto; padding:5px 14px 12px; }
+    table { width:100%; border-collapse:collapse; font:12px Arial,sans-serif; }
+    th,td { padding:10px 5px; border-bottom:1px solid var(--line); text-align:left; white-space:nowrap; }
+    th { color:var(--muted); font-size:10px; text-transform:uppercase; }
+    .status { color:var(--green); font-weight:700; }
+    .empty { padding:20px 5px; color:var(--muted); text-align:center; }
+    .updated { color:var(--muted); font-size:11px; }
+    @media (max-width:900px) { .topbar-inner { flex-wrap:wrap; padding:0 10px; } .logo { flex:1 0 auto; min-width:0; padding-right:12px; border-right:0; } .sign-in { margin-left:0; } }
+    @media (max-width:850px) { .warehouse-grid { grid-template-columns:1fr; } }
+    @media (max-width:700px) { .topbar { height:auto; min-height:56px; } .logo { flex:1 0 auto; } .logo-name { font-size:15px; } .logo-sub { display:none; } .nav-link { height:46px; padding:0 8px; font-size:12px; } .nav-icon { display:none; } .sign-in { flex:1 0 100%; padding:10px 8px; border:0; text-align:right; font-size:11px; } main { padding:24px 14px 48px; } h1 { font-size:32px; } .heading { display:block; } .heading button { margin-top:12px; } }
+  </style>
+</head>
+<body>
+  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/"><img class="nav-icon" src="{{ url_for('static', filename='images/archives.png') }}" alt="">Overview</a><a class="nav-link" href="/inventory"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Inventory</a><a class="nav-link active" href="/storage"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Storage</a><a class="sign-in" href="#">♙ &nbsp; Login/Sign in</a></div></nav>
+  <main>
+    <div class="heading"><div><p class="subtle">Warehouse stock</p><h1>Storage</h1><p class="subtle">All motorcycles currently stored at each warehouse.</p></div><div><div class="updated">Updated <span id="updatedTime"></span></div><button id="refresh" type="button">Refresh storage</button></div></div>
+    <section id="warehouses" class="warehouse-grid"><p class="empty">Loading storage...</p></section>
+  </main>
+  <script>
+    const warehouses = ['NMT1', 'NMT2', 'NMT3'];
+    const storage = document.getElementById('warehouses');
+    const updatedTime = document.getElementById('updatedTime');
+    const escapeHtml = value => String(value || '-').replace(/[&<>\"']/g, character => ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[character]));
+    async function refreshStorage() {
+      const response = await fetch('/api/storage');
+      const data = await response.json();
+      const grouped = Object.fromEntries(warehouses.map(warehouse => [warehouse, []]));
+      data.motorcycles.forEach(motorcycle => {
+        const warehouse = warehouses.find(name => String(motorcycle.location || '').toUpperCase().startsWith(name));
+        if (warehouse) grouped[warehouse].push(motorcycle);
+      });
+      storage.innerHTML = warehouses.map(warehouse => {
+        const motorcycles = grouped[warehouse];
+        const rows = motorcycles.map(motorcycle => `<tr><td>${escapeHtml(motorcycle.identifier)}</td><td>${escapeHtml(motorcycle.engine)}</td><td>${escapeHtml(motorcycle.frame)}</td><td>${escapeHtml(motorcycle.model)}</td><td class="status">${escapeHtml(motorcycle.status)}</td></tr>`).join('');
+        return `<article class="warehouse"><div class="warehouse-heading"><h2>${warehouse} Warehouse</h2><span class="warehouse-count">${motorcycles.length}</span></div><div class="table-wrap"><table><thead><tr><th>Identifier</th><th>Engine</th><th>Frame</th><th>Model</th><th>Status</th></tr></thead><tbody>${rows || '<tr><td colspan="5" class="empty">No motorcycles stored here.</td></tr>'}</tbody></table></div></article>`;
+      }).join('');
+      updatedTime.textContent = new Intl.DateTimeFormat(undefined, { hour:'2-digit', minute:'2-digit' }).format(new Date());
+    }
+    document.getElementById('refresh').onclick = refreshStorage;
+    refreshStorage();
+  </script>
+</body>
+</html>

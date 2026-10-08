@@ -155,6 +155,45 @@ def inventory():
     return render_template("inventory.html")
 
 
+@app.get("/storage")
+def storage():
+    return render_template("storage.html")
+
+
+@app.get("/api/storage")
+def storage_data():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+                SELECT vin, engine_number, frame_number, group_model, color,
+                             status, warehouse_location
+        FROM motorcycles
+        WHERE status = 'IN_WAREHOUSE'
+                    AND (
+                            UPPER(warehouse_location) LIKE 'NMT1%'
+                            OR UPPER(warehouse_location) LIKE 'NMT2%'
+                            OR UPPER(warehouse_location) LIKE 'NMT3%'
+                    )
+        ORDER BY UPPER(warehouse_location), id
+        """
+    ).fetchall()
+    connection.close()
+    return jsonify(
+        motorcycles=[
+            {
+                "identifier": row[0],
+                "engine": row[1],
+                "frame": row[2],
+                "model": row[3],
+                "color": row[4],
+                "status": row[5],
+                "location": row[6],
+            }
+            for row in rows
+        ]
+    )
+
+
 @app.post("/api/upload")
 def upload_workbook():
     uploaded = request.files.get("file")
@@ -266,6 +305,7 @@ def inventory_scans():
                inventory_scans.completed_at
         FROM inventory_scans
         JOIN motorcycles ON motorcycles.id = inventory_scans.motorcycle_id
+         WHERE inventory_scans.completed_at IS NULL
         ORDER BY inventory_scans.id DESC
         """
     ).fetchall()
@@ -330,6 +370,10 @@ def inventory_scan():
         VALUES (?, ?, ?, ?)
         """,
         (motorcycle[0], "bulk", truck_number, now),
+    )
+    connection.execute(
+        "UPDATE motorcycles SET status = 'DISPATCHED' WHERE id = ?",
+        (motorcycle[0],),
     )
     connection.commit()
     connection.close()

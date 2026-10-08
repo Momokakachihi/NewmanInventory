@@ -6,7 +6,7 @@
   <title>Inventory Overview | Newman</title>
   <style>
     :root { --maroon:#5b1719; --maroon-dark:#421013; --gold:#f6b83f; --ink:#4d2529; --muted:#8d8582; --line:#e9e4e1; --paper:#f8f7f6; --panel:#fff; }
-    * { box-sizing:border-box; }
+    * { box-sizing:border-box; } html,body { overflow-x:hidden; }
     body { margin:0; color:var(--ink); background:var(--paper); font:13px/1.45 Arial,sans-serif; }
     .topbar { height:56px; color:#fff; background:var(--maroon); border-bottom:2px solid #1593d0; }
     .topbar-inner { max-width:1100px; height:100%; margin:auto; display:flex; align-items:center; }
@@ -38,11 +38,11 @@
     .chart-note { float:right; color:#8d8582; font-size:9px; } .chart-note strong { color:var(--maroon); }
     .footer-note { display:flex; justify-content:space-between; margin-top:15px; color:#9a9290; font-size:9px; }
     .empty-chart { align-self:center; width:100%; color:var(--muted); text-align:center; font-size:11px; }
-    @media (max-width:700px) { .logo { min-width:0; padding-right:12px; } .logo-name { font-size:15px; } .logo-sub { display:none; } .nav-link { padding:0 10px; } .sign-in { padding:18px 10px; } .overview-grid { display:block; } .panel { margin-bottom:14px; } .page-heading { display:block; } .updated { padding-top:0; } .chart { gap:3px; } .bar-label { font-size:7px; } }
+    @media (max-width:700px) { .topbar { height:auto; min-height:56px; } .topbar-inner { flex-wrap:wrap; padding:0 10px; } .logo { flex:1 0 auto; min-width:0; padding-right:12px; border-right:0; } .logo-name { font-size:15px; } .logo-sub { display:none; } .nav-link { height:46px; padding:0 9px; font-size:12px; } .sign-in { flex:1 0 100%; margin:0; padding:10px; border:0; text-align:right; font-size:11px; } .overview-grid { display:block; } .panel { margin-bottom:14px; } .page-heading { display:block; } .updated { padding-top:0; } .chart { gap:3px; height:190px; } .bar-label { font-size:7px; } }
   </style>
 </head>
 <body>
-  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link active" href="/"><img class="nav-icon" src="{{ url_for('static', filename='images/archives.png') }}" alt="">Overview</a><a class="nav-link" href="/inventory"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Inventory</a><a class="sign-in" href="#">♙ &nbsp; Login/Sign in</a></div></nav>
+  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link active" href="/"><img class="nav-icon" src="{{ url_for('static', filename='images/archives.png') }}" alt="">Overview</a><a class="nav-link" href="/inventory"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Inventory</a><a class="nav-link" href="/storage"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Storage</a><a class="sign-in" href="#">♙ &nbsp; Login/Sign in</a></div></nav>
   <main>
     <div class="page-heading"><div><div class="subtle">Motorcycle inventory overview</div><h1>Inventory overview</h1><p class="subtle">Warehouse stock and monthly motorcycle departures at a glance.</p></div><div class="updated">● &nbsp;Updated today, <span id="updatedTime"></span></div></div>
     <section class="overview-grid">
