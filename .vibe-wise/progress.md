@@ -28,3 +28,9 @@ No learning events recorded yet.
 - Rows group motorcycles by DR number, or by a stored STS number when available; quantity is calculated per group.
 - STS/DR Date comes from the imported DR date. Dispatched Date comes from the DISPATCHED movement. ETD and ETA remain blank.
 - A future separate STS workbook import is still pending because its exact headers and matching fields are not yet available.
+
+## Report status behavior
+
+- The printable truck Report shows only motorcycles with an unfinished live truck scan.
+- Received/completed scans are excluded from the printable Report.
+- The Report does not include a separate status column.

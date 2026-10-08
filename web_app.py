@@ -309,6 +309,7 @@ def truck_reports():
             WHERE movement_type = 'DISPATCHED'
             GROUP BY motorcycle_id
         ) AS dispatched ON dispatched.motorcycle_id = motorcycles.id
+        WHERE inventory_scans.completed_at IS NULL
         ORDER BY inventory_scans.truck_number, inventory_scans.scanned_at
         """
     ).fetchall()

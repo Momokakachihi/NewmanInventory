@@ -136,7 +136,7 @@
         <td>${group.quantity}</td>
         <td>${escapeHtml(formatDate(group.dispatchDate))}</td><td></td><td></td>
       </tr>`).join('');
-      if (!grouped.length) rows.innerHTML = '<tr><td colspan="7" class="empty">No DR or STS numbers found for this truck.</td></tr>';
+      if (!grouped.length) rows.innerHTML = '<tr><td colspan="7" class="empty">No live motorcycles found on this truck.</td></tr>';
       if (grouped.length) rows.innerHTML += `<tr class="total-row"><td colspan="3">TOTAL</td><td>${grouped.reduce((sum, group) => sum + group.quantity, 0)}</td><td colspan="3"></td></tr>`;
     }
 
