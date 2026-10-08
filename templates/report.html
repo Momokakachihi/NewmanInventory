@@ -49,7 +49,7 @@
       body, main { background: #fff; }
       main { margin: 0; padding: 10px; }
     }
-    @media (max-width: 900px) {
+    @media (max-width: 700px) {
       .topbar { height: auto; min-height: 56px; }
       .topbar-inner { flex-wrap: wrap; padding: 0 10px; }
       .logo { flex: 1 0 auto; min-width: 0; padding-right: 12px; border-right: 0; }
@@ -59,7 +59,7 @@
   </style>
 </head>
 <body>
-  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/">Overview</a><a class="nav-link" href="/inventory">Inventory</a><a class="nav-link" href="/storage">Storage</a><a class="nav-link" href="/import">Import</a><a class="nav-link active" href="/report">Report</a><a class="nav-link" href="/delivery-report">Delivery Report</a><a class="nav-link" href="/sts">STS</a><a class="sign-in" href="{{ url_for('logout') }}">♙ &nbsp; Logout</a></div></nav>
+  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/"><img class="nav-icon" src="{{ url_for('static', filename='images/archives.png') }}" alt="">Overview</a><a class="nav-link" href="/inventory"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Inventory</a><a class="nav-link" href="/storage"><img class="nav-icon" src="{{ url_for('static', filename='images/inventory.png') }}" alt="">Storage</a><a class="nav-link" href="/import">Import</a><a class="nav-link active" href="/report">Report</a><a class="nav-link" href="/delivery-report">Delivery Report</a><a class="nav-link" href="/sts">STS</a><a class="sign-in" href="{{ url_for('logout') }}">♙ &nbsp; Logout</a></div></nav>
   <main>
     <div class="controls">
       <select id="truck"><option value="">Choose truck</option></select>
