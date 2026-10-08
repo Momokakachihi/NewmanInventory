@@ -1,10 +1,11 @@
 import json
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
 
 from index import (
     clean_value,
@@ -16,9 +17,44 @@ from index import (
 
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("NEWMAN_SECRET_KEY", "newman-development-secret")
 app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 UPLOADS = Path(tempfile.gettempdir()) / "newman_inventory_uploads"
 UPLOADS.mkdir(exist_ok=True)
+
+
+@app.before_request
+def require_login():
+    if request.endpoint in {"login", "logout", "static"}:
+        return None
+    if session.get("authenticated"):
+        return None
+    if request.path.startswith("/api/"):
+        return jsonify(error="Please sign in to continue."), 401
+    return redirect(url_for("login", next=request.full_path))
+
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    error = None
+    if request.method == "POST":
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if username == "admin" and password == "1234":
+            session.clear()
+            session["authenticated"] = True
+            next_url = request.form.get("next", "")
+            if not next_url.startswith("/") or next_url.startswith("//"):
+                next_url = url_for("home")
+            return redirect(next_url)
+        error = "Invalid username or password."
+    return render_template("login.html", error=error, next=request.args.get("next", ""))
+
+
+@app.get("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for("login"))
 
 
 def clean_excel_value(value):

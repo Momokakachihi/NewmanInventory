@@ -21,7 +21,7 @@
   </style>
 </head>
 <body>
-  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/">Overview</a><a class="nav-link active" href="/inventory">Inventory</a><a class="nav-link" href="/storage">Storage</a><a class="nav-link" href="/import">Import</a><a class="nav-link" href="/report">Report</a><a class="nav-link" href="/delivery-report">Delivery Report</a><a class="nav-link" href="/sts">STS</a><a class="sign-in" href="#">♙ &nbsp; Login/Sign in</a></div></nav>
+  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/">Overview</a><a class="nav-link active" href="/inventory">Inventory</a><a class="nav-link" href="/storage">Storage</a><a class="nav-link" href="/import">Import</a><a class="nav-link" href="/report">Report</a><a class="nav-link" href="/delivery-report">Delivery Report</a><a class="nav-link" href="/sts">STS</a><a class="sign-in" href="{{ url_for('logout') }}">♙ &nbsp; Logout</a></div></nav>
   <main>
     <header><div class="eyebrow">Inventory movement</div><h1>Load or unload motorcycles</h1><p class="subtle">Choose a movement, then scan motorcycles into or out of the truck flow.</p></header>
     <section class="grid">
