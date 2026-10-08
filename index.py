@@ -18,6 +18,7 @@ IMPORT_COLUMNS = (
 	"frame_number",
 	"warehouse_location",
 	"date_forwarded",
+	"sts_number",
 )
 
 
@@ -71,6 +72,16 @@ def setup_database(connection):
 			scanned_at TEXT NOT NULL,
 			completed_at TEXT,
 			FOREIGN KEY (motorcycle_id) REFERENCES motorcycles(id)
+		);
+
+		CREATE TABLE IF NOT EXISTS no_file_motorcycles (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			frame_number TEXT,
+			engine_number TEXT,
+			truck_number TEXT,
+			destination TEXT,
+			scanned_at TEXT NOT NULL,
+			notes TEXT
 		);
 	""")
 	for column in IMPORT_COLUMNS:

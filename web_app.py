@@ -100,6 +100,7 @@ def import_workbook(connection, path, sheet_name):
             "frame_number": frame_number.upper(),
             "warehouse_location": warehouse_location,
             "date_forwarded": find_column(row, "DATE FORWARDED"),
+            "sts_number": find_column(row, "STS Number"),
             "source_row": json.dumps(row, ensure_ascii=True),
         }
 
@@ -107,10 +108,15 @@ def import_workbook(connection, path, sheet_name):
             "SELECT id FROM motorcycles WHERE vin = ?", (fields["vin"],)
         ).fetchone()
         if existing:
-            set_clause = ", ".join(f"{key} = ?" for key in fields if key != "vin")
+            motorcycle_id = existing[0]
+            update_fields = {
+                key: value for key, value in fields.items()
+                if key != "vin" and (key != "sts_number" or value)
+            }
+            set_clause = ", ".join(f"{key} = ?" for key in update_fields)
             connection.execute(
                 f"UPDATE motorcycles SET {set_clause} WHERE id = ?",
-                [fields[key] for key in fields if key != "vin"] + [existing[0]],
+                list(update_fields.values()) + [motorcycle_id],
             )
             updated += 1
         else:
@@ -128,7 +134,40 @@ def import_workbook(connection, path, sheet_name):
                 """,
                 (cursor.lastrowid, fields["location"], now, f"Imported row {row_number + header_row}"),
             )
+            motorcycle_id = cursor.lastrowid
             imported += 1
+
+        no_file_rows = connection.execute(
+            """
+            SELECT id, truck_number, destination, scanned_at
+            FROM no_file_motorcycles
+            WHERE UPPER(COALESCE(frame_number, '')) IN (?, ?)
+               OR UPPER(COALESCE(engine_number, '')) IN (?, ?)
+            """,
+            (
+                fields["frame_number"].upper(),
+                fields["engine_number"].upper(),
+                fields["frame_number"].upper(),
+                fields["engine_number"].upper(),
+            ),
+        ).fetchall()
+        for no_file_id, truck_number, destination, scanned_at in no_file_rows:
+            connection.execute(
+                """
+                INSERT INTO movements
+                    (motorcycle_id, movement_type, from_location, to_location, movement_date, notes)
+                VALUES (?, 'NO_FILE_RECONCILED', ?, ?, ?, ?)
+                """,
+                (
+                    motorcycle_id,
+                    destination,
+                    destination,
+                    now,
+                    f"Previously unloaded without a file from {truck_number or 'unknown truck'} "
+                    f"at {scanned_at}",
+                ),
+            )
+            connection.execute("DELETE FROM no_file_motorcycles WHERE id = ?", (no_file_id,))
 
     connection.commit()
     if imported == 0 and updated == 0:
@@ -153,6 +192,26 @@ def home():
 @app.get("/inventory")
 def inventory():
     return render_template("inventory.html")
+
+
+@app.get("/import")
+def import_inventory():
+    return render_template("import.html")
+
+
+@app.get("/report")
+def report():
+    return render_template("report.html")
+
+
+@app.get("/delivery-report")
+def delivery_report():
+    return render_template("delivery_report.html")
+
+
+@app.get("/sts")
+def sts():
+    return render_template("sts.html")
 
 
 @app.get("/storage")
@@ -192,6 +251,128 @@ def storage_data():
             for row in rows
         ]
     )
+
+
+@app.get("/api/reports/trucks")
+def truck_reports():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+        SELECT inventory_scans.truck_number, inventory_scans.scanned_at,
+               motorcycles.vin, motorcycles.engine_number, motorcycles.frame_number,
+               motorcycles.dr_number, motorcycles.sts_number, motorcycles.dr_date,
+               motorcycles.group_model, inventory_scans.completed_at,
+               dispatched.movement_date
+        FROM inventory_scans
+        JOIN motorcycles ON motorcycles.id = inventory_scans.motorcycle_id
+        LEFT JOIN (
+            SELECT motorcycle_id, MAX(movement_date) AS movement_date
+            FROM movements
+            WHERE movement_type = 'DISPATCHED'
+            GROUP BY motorcycle_id
+        ) AS dispatched ON dispatched.motorcycle_id = motorcycles.id
+        ORDER BY inventory_scans.truck_number, inventory_scans.scanned_at
+        """
+    ).fetchall()
+    connection.close()
+    return jsonify(
+        records=[
+            {
+                "truck_number": row[0],
+                "scanned_at": row[1],
+                "identifier": row[2],
+                "engine": row[3],
+                "frame": row[4],
+                "dr_number": row[5],
+                "sts_number": row[6],
+                "dr_date": row[7],
+                "model": row[8],
+                "completed_at": row[9],
+                "dispatch_date": row[10],
+            }
+            for row in rows
+        ]
+    )
+
+
+@app.get("/api/delivery-report")
+def delivery_report_data():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+        SELECT motorcycles.dr_number, motorcycles.vin, motorcycles.engine_number,
+               motorcycles.frame_number, motorcycles.group_model,
+               motorcycles.destination, dispatched.movement_date
+        FROM motorcycles
+        LEFT JOIN (
+            SELECT motorcycle_id, MAX(movement_date) AS movement_date
+            FROM movements
+            WHERE movement_type = 'DISPATCHED'
+            GROUP BY motorcycle_id
+        ) AS dispatched ON dispatched.motorcycle_id = motorcycles.id
+        WHERE TRIM(COALESCE(motorcycles.dr_number, '')) <> ''
+        ORDER BY motorcycles.dr_number, motorcycles.id
+        """
+    ).fetchall()
+    connection.close()
+    return jsonify(
+        records=[
+            {
+                "dr_number": row[0],
+                "identifier": row[1],
+                "engine": row[2],
+                "frame": row[3],
+                "model": row[4],
+                "destination": row[5],
+                "dispatch_date": row[6],
+            }
+            for row in rows
+        ]
+    )
+
+
+@app.get("/api/sts")
+def sts_data():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+        SELECT id, vin, engine_number, frame_number, group_model, dr_number,
+               status, location
+        FROM motorcycles
+        ORDER BY CASE WHEN TRIM(COALESCE(dr_number, '')) = '' THEN 0 ELSE 1 END, id
+        """
+    ).fetchall()
+    connection.close()
+    return jsonify(
+        records=[
+            {
+                "id": row[0],
+                "identifier": row[1],
+                "engine": row[2],
+                "frame": row[3],
+                "model": row[4],
+                "dr_number": row[5] or "",
+                "status": row[6],
+                "location": row[7] or "",
+            }
+            for row in rows
+        ]
+    )
+
+
+@app.patch("/api/sts/<int:motorcycle_id>")
+def update_sts(motorcycle_id):
+    dr_number = request.form.get("dr_number", "").strip()
+    connection = get_connection()
+    cursor = connection.execute(
+        "UPDATE motorcycles SET dr_number = ? WHERE id = ?",
+        (dr_number, motorcycle_id),
+    )
+    connection.commit()
+    connection.close()
+    if cursor.rowcount == 0:
+        return jsonify(error="Motorcycle was not found."), 404
+    return jsonify(message="DR number updated.", dr_number=dr_number)
 
 
 @app.post("/api/upload")
@@ -382,6 +563,91 @@ def inventory_scan():
         identifier=motorcycle[1],
         model=motorcycle[3],
         truck_number=truck_number,
+    )
+
+
+@app.post("/api/unload")
+def unload():
+    value = request.form.get("value", "").strip()
+    destination = request.form.get("destination", "").strip().upper()
+    if not value or destination not in {"NMT1", "NMT2", "NMT3"}:
+        return jsonify(error="Enter a scan and choose a destination."), 400
+
+    connection = get_connection()
+    motorcycle = find_by_scan(connection, value)
+    now = datetime.now().isoformat(timespec="seconds")
+    if motorcycle is None:
+        connection.execute(
+            """
+            INSERT INTO no_file_motorcycles
+                (frame_number, engine_number, destination, scanned_at, notes)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (value.upper(), value.upper(), destination, now, "Unloaded without a matching file"),
+        )
+        connection.commit()
+        connection.close()
+        return jsonify(
+            message="No file found. The scan was saved for later reconciliation.",
+            identifier=value.upper(),
+            no_file=True,
+        )
+
+    connection.execute(
+        """
+        UPDATE motorcycles
+        SET status = 'IN_WAREHOUSE', location = ?, warehouse_location = ?
+        WHERE id = ?
+        """,
+        (destination, destination, motorcycle[0]),
+    )
+    connection.execute(
+        """
+        INSERT INTO movements
+            (motorcycle_id, movement_type, from_location, to_location, movement_date)
+        VALUES (?, 'RECEIVED', ?, ?, ?)
+        """,
+        (motorcycle[0], motorcycle[6], destination, now),
+    )
+    connection.execute(
+        """
+        UPDATE inventory_scans SET completed_at = ?
+        WHERE motorcycle_id = ? AND completed_at IS NULL
+        """,
+        (now, motorcycle[0]),
+    )
+    connection.commit()
+    connection.close()
+    return jsonify(
+        message="Motorcycle unloaded and added to the warehouse.",
+        identifier=motorcycle[1],
+        no_file=False,
+    )
+
+
+@app.get("/api/no-file")
+def no_file_data():
+    connection = get_connection()
+    rows = connection.execute(
+        """
+        SELECT id, frame_number, engine_number, truck_number, destination, scanned_at
+        FROM no_file_motorcycles
+        ORDER BY id DESC
+        """
+    ).fetchall()
+    connection.close()
+    return jsonify(
+        records=[
+            {
+                "id": row[0],
+                "frame": row[1],
+                "engine": row[2],
+                "truck_number": row[3] or "",
+                "destination": row[4] or "",
+                "scanned_at": row[5],
+            }
+            for row in rows
+        ]
     )
 
 

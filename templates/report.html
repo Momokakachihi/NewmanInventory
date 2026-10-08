@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>STS Report | Newman</title>
+  <style>
+    :root { --maroon:#5b1719; --maroon-dark:#421013; --gold:#f6b83f; --ink:#4d2529; --muted:#8d8582; --line:#e9e4e1; --paper:#f8f7f6; --panel:#fff; }
+    * { box-sizing: border-box; }
+    html, body { overflow-x: hidden; }
+    body { margin: 0; color: var(--ink); background: var(--paper); font: 13px/1.45 Arial, sans-serif; }
+    .topbar { height: 56px; color: #fff; background: var(--maroon); border-bottom: 2px solid #1593d0; }
+    .topbar-inner { max-width: 1100px; height: 100%; margin: auto; display: flex; align-items: center; }
+    .logo { display: flex; align-items: center; gap: 10px; min-width: 245px; padding: 0 26px 0 4px; border-right: 1px solid #8a4a4b; }
+    .logo-mark { width: 38px; height: 38px; object-fit: contain; }
+    .logo-name { font-size: 19px; font-weight: 800; letter-spacing: 1px; }
+    .logo-sub { display: block; margin-top: -3px; font-size: 6px; letter-spacing: .8px; }
+    .nav-link { display: flex; align-items: center; height: 100%; gap: 8px; padding: 0 20px; color: #fff; border-bottom: 3px solid transparent; text-decoration: none; font-weight: 700; }
+    .nav-link:hover, .nav-link.active { border-bottom-color: var(--gold); }
+    .sign-in { margin-left: auto; padding: 18px 20px; border-left: 1px solid #8a4a4b; border-right: 1px solid #8a4a4b; color: #fff; text-decoration: none; font-weight: 700; }
+    .nav-icon { width: 15px; height: 15px; object-fit: contain; }
+    main { max-width: 1000px; margin: 30px auto; padding: 24px; background: #fff; }
+    .controls { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    input, select, button { padding: 9px; font: inherit; }
+    button { color: #fff; background: #5b1719; border: 0; border-radius: 4px; cursor: pointer; }
+    .form-header { position: relative; margin-bottom: 18px; }
+    .form-header strong, .form-header span { display: block; }
+    .form-header strong { font-size: 16px; }
+    .form-header span { margin-top: 5px; font-weight: 700; }
+    .truck-plate { position: absolute; top: 0; right: 0; }
+    .field { display: inline-block; min-width: 230px; margin: 3px 24px 3px 0; }
+    .field label { display: inline-block; min-width: 105px; font-weight: 700; }
+    .field input { width: 120px; border: 0; border-bottom: 1px solid #555; }
+    .report-table { width: 100%; table-layout: fixed; border-collapse: collapse; }
+    .report-table th, .report-table td { padding: 8px 6px; border: 1px solid #555; text-align: left; }
+    .report-table th { font-size: 12px; }
+    .report-table td:nth-child(4) { text-align: center; }
+    .report-table th:nth-child(1), .report-table td:nth-child(1) { width: 16%; }
+    .report-table th:nth-child(2), .report-table td:nth-child(2) { width: 16%; }
+    .report-table th:nth-child(3), .report-table td:nth-child(3) { width: 14%; }
+    .report-table th:nth-child(4), .report-table td:nth-child(4) { width: 8%; }
+    .report-table th:nth-child(5), .report-table td:nth-child(5) { width: 20%; }
+    .report-table th:nth-child(6), .report-table td:nth-child(6),
+    .report-table th:nth-child(7), .report-table td:nth-child(7) { width: 13%; }
+    .total-row td { font-weight: 700; }
+    .empty { padding: 20px 0; color: #777; }
+    @media print {
+      nav, .controls { display: none; }
+      body, main { background: #fff; }
+      main { margin: 0; padding: 10px; }
+    }
+    @media (max-width: 900px) {
+      .topbar { height: auto; min-height: 56px; }
+      .topbar-inner { flex-wrap: wrap; padding: 0 10px; }
+      .logo { flex: 1 0 auto; min-width: 0; padding-right: 12px; border-right: 0; }
+      .nav-link { height: 46px; padding: 0 9px; font-size: 12px; }
+      .sign-in { flex: 1 0 100%; margin: 0; padding: 10px; border: 0; text-align: right; font-size: 11px; }
+    }
+  </style>
+</head>
+<body>
+  <nav class="topbar"><div class="topbar-inner"><div class="logo"><img class="logo-mark" src="{{ url_for('static', filename='images/newman-logo.png') }}" alt="Newman logo"><div><span class="logo-name">NEWMANN</span><span class="logo-sub">4T'S TRUCKING SERVICES CORPORATION</span></div></div><a class="nav-link" href="/">Overview</a><a class="nav-link" href="/inventory">Inventory</a><a class="nav-link" href="/storage">Storage</a><a class="nav-link" href="/import">Import</a><a class="nav-link active" href="/report">Report</a><a class="nav-link" href="/delivery-report">Delivery Report</a><a class="nav-link" href="/sts">STS</a><a class="sign-in" href="#">♙ &nbsp; Login/Sign in</a></div></nav>
+  <main>
+    <div class="controls">
+      <select id="truck"><option value="">Choose truck</option></select>
+      <input id="driver" placeholder="Driver">
+      <input id="helper" placeholder="Helper">
+      <input id="destination" placeholder="Destination">
+      <input id="plate" placeholder="Truck plate #">
+      <label>Date prepared <input id="prepared" type="date"></label>
+      <button id="print" type="button">Print report</button>
+    </div>
+    <section class="form-header">
+      <strong>Kawasaki Motors (Phils.) Corporation</strong>
+      <span>STS FORM</span>
+      <span>TRUCKING: <b>Newmann 478 Trucking</b></span>
+      <span>DRIVER: <b id="driverValue"></b></span>
+      <span>HELPER: <b id="helperValue"></b></span>
+      <span>DATE PREPARED: <b id="preparedValue"></b></span>
+      <span>DESTINATION: <b id="destinationValue"></b></span>
+      <span class="truck-plate">TRUCK PLATE #: <b id="plateValue"></b></span>
+    </section>
+    <table class="report-table">
+      <thead><tr><th>STS # / DR #</th><th>STS/DR DATE</th><th>MODEL</th><th>QTY</th><th>DISPATCHED DATE</th><th>ETD</th><th>ETA</th></tr></thead>
+      <tbody id="rows"><tr><td colspan="7" class="empty">Choose a truck.</td></tr></tbody>
+    </table>
+  </main>
+  <script>
+    const truck = document.getElementById('truck');
+    const rows = document.getElementById('rows');
+    const fields = ['driver', 'helper', 'destination', 'plate', 'prepared'];
+    const recordsByTruck = {};
+    document.getElementById('prepared').value = new Date().toISOString().slice(0, 10);
+
+    function escapeHtml(value) {
+      return String(value || '').replace(/[&<>"']/g, character => (
+        {'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[character]
+      ));
+    }
+
+    function formatDate(value) {
+      if (!value) return '';
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? String(value).split('T')[0] : date.toLocaleDateString();
+    }
+
+    function updateHeader() {
+      document.getElementById('driverValue').textContent = document.getElementById('driver').value;
+      document.getElementById('helperValue').textContent = document.getElementById('helper').value;
+      document.getElementById('destinationValue').textContent = document.getElementById('destination').value;
+      document.getElementById('plateValue').textContent = document.getElementById('plate').value;
+      const prepared = document.getElementById('prepared').value;
+      document.getElementById('preparedValue').textContent = prepared
+        ? new Date(`${prepared}T00:00:00`).toLocaleDateString() : '';
+    }
+
+    function renderRows() {
+      updateHeader();
+      const groups = {};
+      (recordsByTruck[truck.value] || []).forEach(record => {
+        const key = record.dr_number || record.sts_number;
+        if (!key) return;
+        const group = groups[key] || {
+          key, date: record.dr_date, model: record.model, quantity: 0,
+          dispatchDate: record.dispatch_date
+        };
+        group.quantity += 1;
+        group.dispatchDate = group.dispatchDate || record.dispatch_date;
+        groups[key] = group;
+      });
+      const grouped = Object.values(groups);
+      rows.innerHTML = grouped.map(group => `<tr>
+        <td>${escapeHtml(group.key)}</td>
+        <td>${escapeHtml(group.date)}</td>
+        <td>${escapeHtml(group.model)}</td>
+        <td>${group.quantity}</td>
+        <td>${escapeHtml(formatDate(group.dispatchDate))}</td><td></td><td></td>
+      </tr>`).join('');
+      if (!grouped.length) rows.innerHTML = '<tr><td colspan="7" class="empty">No DR or STS numbers found for this truck.</td></tr>';
+      if (grouped.length) rows.innerHTML += `<tr class="total-row"><td colspan="3">TOTAL</td><td>${grouped.reduce((sum, group) => sum + group.quantity, 0)}</td><td colspan="3"></td></tr>`;
+    }
+
+    fetch('/api/reports/trucks').then(response => response.json()).then(data => {
+      data.records.forEach(record => {
+        (recordsByTruck[record.truck_number] ||= []).push(record);
+      });
+      Object.keys(recordsByTruck).forEach(number => truck.add(new Option(number, number)));
+    });
+    truck.onchange = renderRows;
+    fields.forEach(id => document.getElementById(id).oninput = updateHeader);
+    document.getElementById('print').onclick = () => truck.value
+      ? print() : alert('Choose a truck first.');
+  </script>
+</body>
+</html>
